@@ -1,0 +1,72 @@
+research_profile:
+  tier1_keywords:
+    - DIA-MS
+    - data-independent acquisition
+    - cancer proteomics
+    - foundation model
+    - federated learning
+    - synthetic lethality
+    - multi-omics integration
+    - ProCan
+  tier2_keywords:
+    - mass spectrometry
+    - label-free quantification
+    - cancer cell lines
+    - drug response prediction
+    - self-supervised learning
+    - CRISPR screen
+    - pan-cancer
+    - transfer learning
+    - multimodal learning
+  tier3_keywords:
+    - proteogenomics
+    - single-cell proteomics
+    - transformer
+    - deep learning
+    - cancer genomics
+    - biomarker discovery
+    - clinical proteomics
+    - protein language model
+
+scoring:
+  model: sentence-transformers/all-MiniLM-L6-v2
+  nn_sim_low: 0.25      # cosine floor mapped to 0
+  nn_sim_high: 0.75     # cosine ceiling mapped to 100
+  weights:
+    nn: 0.7
+    keyword: 0.3
+  tiers:
+    high: 60
+    medium: 30
+
+library:
+  path: data/library.json
+  cache: data/reference.npz
+  meta: data/reference_meta.json
+
+fetch:
+  lookback_days: 14
+  max_papers_per_feed: 100
+  # User-Agent sent with RSS requests (some publishers reject default python-urllib UA)
+  user_agent: "SimonResearchRSS/0.1 (+https://github.com/)"
+  request_timeout: 30
+
+feeds:
+  # Tier-1 journals (big venues the user explicitly wants prominent)
+  - {name: Nature,                      url: "https://www.nature.com/nature.rss"}
+  - {name: Nature Methods,              url: "https://www.nature.com/nmeth.rss"}
+  - {name: Nature Biotechnology,        url: "https://www.nature.com/nbt.rss"}
+  - {name: Nature Medicine,             url: "https://www.nature.com/nm.rss"}
+  - {name: Nature Communications,       url: "https://www.nature.com/ncomms.rss"}
+  - {name: Nature Machine Intelligence, url: "https://www.nature.com/natmachintell.rss"}
+  - {name: Nature Cancer,               url: "https://www.nature.com/natcancer.rss"}
+  - {name: Nature Reviews Cancer,       url: "https://www.nature.com/nrc.rss"}
+  - {name: Cell,                        url: "https://www.cell.com/cell/inpress.rss"}
+  - {name: Cancer Cell,                 url: "https://www.cell.com/cancer-cell/inpress.rss"}
+  - {name: Molecular Cell,              url: "https://www.cell.com/molecular-cell/inpress.rss"}
+
+  # bioRxiv subject feeds
+  - {name: bioRxiv Cancer Biology,   url: "https://connect.biorxiv.org/biorxiv_xml.php?subject=cancer_biology"}
+  - {name: bioRxiv Bioinformatics,   url: "https://connect.biorxiv.org/biorxiv_xml.php?subject=bioinformatics"}
+  - {name: bioRxiv Systems Biology,  url: "https://connect.biorxiv.org/biorxiv_xml.php?subject=systems_biology"}
+  - {name: bioRxiv Biochemistry,     url: "https://connect.biorxiv.org/biorxiv_xml.php?subject=biochemistry"}
