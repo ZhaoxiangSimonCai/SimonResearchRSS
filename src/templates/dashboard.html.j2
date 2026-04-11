@@ -4,6 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Simon Cai's Personalised Research Feed</title>
+<script>
+  // Apply stored theme BEFORE CSS paints, so manual light/dark override
+  // doesn't flash the wrong colour on first render. Runs synchronously
+  // during head parsing.
+  (function () {
+    try {
+      var t = localStorage.getItem('srrss.theme');
+      if (t === 'dark' || t === 'light') {
+        document.documentElement.setAttribute('data-theme', t);
+      }
+    } catch (e) { /* private mode / disabled storage */ }
+  })();
+</script>
 <style>
   :root {
     --bg: #fafafa;
@@ -25,8 +38,9 @@
     --src-biorxiv:  #16a34a;   /* green — biology preprints */
     --src-arxiv:    #d97706;   /* amber — ML/CS firehose */
   }
+  /* Auto dark mode — applies only when the user hasn't manually forced light. */
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
       --bg: #0f172a;
       --surface: #1e293b;
       --text: #f1f5f9;
@@ -46,6 +60,26 @@
       --src-arxiv:    #fbbf24;
     }
   }
+  /* Manual dark mode (user clicked the toggle) — wins regardless of OS setting. */
+  :root[data-theme="dark"] {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --border: #334155;
+    --accent: #60a5fa;
+    --tier-high-bg: #7f1d1d;
+    --tier-high-fg: #fecaca;
+    --tier-medium-bg: #78350f;
+    --tier-medium-fg: #fde68a;
+    --tier-low-bg: #312e81;
+    --tier-low-fg: #c7d2fe;
+    --chip-bg: #334155;
+    --chip-fg: #cbd5e1;
+    --src-journal:  #60a5fa;
+    --src-biorxiv:  #4ade80;
+    --src-arxiv:    #fbbf24;
+  }
   * { box-sizing: border-box; }
   body {
     margin: 0;
@@ -64,7 +98,38 @@
     z-index: 10;
   }
   .container { max-width: 960px; margin: 0 auto; }
-  h1 { margin: 0 0 0.25rem; font-size: 1.5rem; }
+  .title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+  h1 { margin: 0 0 0.25rem; font-size: 1.5rem; flex: 1; }
+  .theme-toggle {
+    flex-shrink: 0;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 9999px;
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+  }
+  .theme-toggle:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  .theme-toggle:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
   .tagline-details {
     margin: 0.35rem 0 0.5rem;
   }
@@ -102,34 +167,14 @@
     .tagline-details summary { display: none; }
     .tagline { margin-top: 0; }
   }
-  /* Mobile: tighten the sticky header so the controls don't dominate.
-     Selectors are scoped under header/.controls to out-specify the base
-     rules further down the stylesheet (which would otherwise win on source
-     order when specificity is equal). */
+  /* Mobile: hide the button row, show the compact dropdown, tighten
+     the sticky header so the controls don't dominate. */
   @media (max-width: 699px) {
     header { padding: 1rem 0.875rem; }
     header h1 { font-size: 1.25rem; }
-    header .controls { gap: 0.45rem; margin-top: 0.65rem; }
-    /* Tier buttons become a single horizontally-scrollable row that bleeds
-       to the screen edges. Takes its own line (flex-basis 100%) so the
-       search input + hide-read checkbox sit on the row below. */
-    header .controls .tier-row {
-      flex-basis: 100%;
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      overflow-y: hidden;
-      gap: 0.4rem;
-      margin: 0 -0.875rem;
-      padding: 0.15rem 0.875rem 0.25rem;
-      scrollbar-width: none;
-      -webkit-overflow-scrolling: touch;
-    }
-    header .controls .tier-row::-webkit-scrollbar { display: none; }
-    header .controls .tier-btn {
-      flex-shrink: 0;
-      padding: 0.3rem 0.75rem;
-      font-size: 0.8rem;
-    }
+    header .controls { gap: 0.5rem; margin-top: 0.65rem; }
+    header .controls .tier-row { display: none; }
+    header .controls .tier-select { display: inline-block; }
     header .controls #search {
       font-size: 0.85rem;
       min-width: 0;
@@ -168,6 +213,19 @@
     color: #ffffff;
     border-color: var(--accent);
   }
+  /* Mobile-only tier filter: native select replaces the button row. */
+  .tier-select {
+    display: none;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    border-radius: 0.375rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    max-width: 100%;
+  }
+  .tier-select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   #search {
     flex: 1;
     min-width: 200px;
@@ -323,7 +381,10 @@
 <body>
 <header>
   <div class="container">
-    <h1>Simon Cai's Personalised Research Feed</h1>
+    <div class="title-row">
+      <h1>Simon Cai's Personalised Research Feed</h1>
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle light/dark theme" title="Toggle light/dark theme">☾</button>
+    </div>
     <details class="tagline-details">
       <summary>About this feed</summary>
       <p class="tagline">
@@ -363,6 +424,12 @@
         <button class="tier-btn" data-tier="medium">Worth scanning</button>
         <button class="tier-btn" data-tier="low">On the radar</button>
       </div>
+      <select class="tier-select" id="tier-select" aria-label="Filter by tier">
+        <option value="all" selected>All</option>
+        <option value="high">Must-read</option>
+        <option value="medium">Worth scanning</option>
+        <option value="low">On the radar</option>
+      </select>
       <label class="hide-read-wrap">
         <input type="checkbox" id="hide-read"> Hide read
       </label>
@@ -393,6 +460,43 @@
   const metaCounts = document.getElementById('meta-counts');
   let activeTier = 'all';
   let searchTerm = '';
+
+  // ---------- theme toggle ----------
+  const THEME_KEY = 'srrss.theme';
+  const themeBtn = document.getElementById('theme-toggle');
+  const prefersDarkMQ = window.matchMedia('(prefers-color-scheme: dark)');
+
+  function isDarkNow() {
+    const t = document.documentElement.getAttribute('data-theme');
+    if (t === 'dark') return true;
+    if (t === 'light') return false;
+    return prefersDarkMQ.matches;
+  }
+  function updateThemeIcon() {
+    // Show the icon for the OPPOSITE mode — i.e. the action the click will take.
+    const dark = isDarkNow();
+    themeBtn.textContent = dark ? '☀' : '☾';
+    themeBtn.setAttribute(
+      'aria-label',
+      dark ? 'Switch to light theme' : 'Switch to dark theme'
+    );
+  }
+  themeBtn.addEventListener('click', function () {
+    const next = isDarkNow() ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+    updateThemeIcon();
+  });
+  // If the OS theme changes while the user hasn't set a manual override,
+  // keep the toggle icon in sync with the new auto state.
+  if (prefersDarkMQ.addEventListener) {
+    prefersDarkMQ.addEventListener('change', function () {
+      if (!document.documentElement.hasAttribute('data-theme')) {
+        updateThemeIcon();
+      }
+    });
+  }
+  updateThemeIcon();
 
   // ---------- read-state (localStorage) ----------
   const READ_KEY = 'srrss.readPapers';
@@ -484,14 +588,23 @@
       }
     });
     metaCounts.textContent = total + ' papers (' + unreadTotal + ' unread)';
-    document.querySelectorAll('.tier-btn').forEach(function (btn) {
-      const t = btn.dataset.tier;
-      const label = t === 'all' ? 'All'
+    function labelFor(t) {
+      return t === 'all' ? 'All'
         : t === 'high' ? 'Must-read'
         : t === 'medium' ? 'Worth scanning'
         : 'On the radar';
-      const u = t === 'all' ? unreadTotal : tierUnread[t];
-      btn.textContent = label + ' (' + u + ')';
+    }
+    function unreadFor(t) {
+      return t === 'all' ? unreadTotal : tierUnread[t];
+    }
+    document.querySelectorAll('.tier-btn').forEach(function (btn) {
+      const t = btn.dataset.tier;
+      btn.textContent = labelFor(t) + ' (' + unreadFor(t) + ')';
+    });
+    // Mirror the same counts into the mobile dropdown options.
+    document.querySelectorAll('#tier-select option').forEach(function (opt) {
+      const t = opt.value;
+      opt.textContent = labelFor(t) + ' (' + unreadFor(t) + ')';
     });
   }
 
@@ -586,14 +699,27 @@
     });
   }
 
+  const tierSelect = document.getElementById('tier-select');
+
+  function setActiveTier(t) {
+    activeTier = t;
+    document.querySelectorAll('.tier-btn').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.tier === t);
+    });
+    if (tierSelect && tierSelect.value !== t) tierSelect.value = t;
+    render();
+  }
+
   document.querySelectorAll('.tier-btn').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      document.querySelectorAll('.tier-btn').forEach(function (b) { b.classList.remove('active'); });
-      btn.classList.add('active');
-      activeTier = btn.dataset.tier;
-      render();
+      setActiveTier(btn.dataset.tier);
     });
   });
+  if (tierSelect) {
+    tierSelect.addEventListener('change', function (e) {
+      setActiveTier(e.target.value);
+    });
+  }
 
   hideReadCheckbox.addEventListener('change', function (e) {
     hideRead = e.target.checked;
