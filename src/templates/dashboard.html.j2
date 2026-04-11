@@ -65,14 +65,48 @@
   }
   .container { max-width: 960px; margin: 0 auto; }
   h1 { margin: 0 0 0.25rem; font-size: 1.5rem; }
-  .tagline {
+  .tagline-details {
     margin: 0.35rem 0 0.5rem;
+  }
+  .tagline-details summary {
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--muted);
+    list-style: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.15rem 0;
+    user-select: none;
+  }
+  .tagline-details summary::-webkit-details-marker { display: none; }
+  .tagline-details summary::before {
+    content: "▸";
+    display: inline-block;
+    font-size: 0.75em;
+    transition: transform 0.15s ease;
+  }
+  .tagline-details[open] summary::before { transform: rotate(90deg); }
+  .tagline-details summary:hover { color: var(--accent); }
+  .tagline {
+    margin: 0.4rem 0 0;
     font-size: 0.9rem;
     line-height: 1.45;
     color: var(--text);
     max-width: 780px;
   }
   .tagline strong { color: var(--accent); }
+  /* Desktop: skip the toggle entirely — JS sets `open` and CSS hides summary,
+     so the description renders inline like a normal paragraph. */
+  @media (min-width: 700px) {
+    .tagline-details summary { display: none; }
+    .tagline { margin-top: 0; }
+  }
+  /* Mobile: tighten the sticky header so the controls don't dominate. */
+  @media (max-width: 699px) {
+    header { padding: 1rem 0.875rem; }
+    h1 { font-size: 1.25rem; }
+  }
   .meta { color: var(--muted); font-size: 0.875rem; }
   .controls {
     display: flex;
@@ -253,14 +287,33 @@
 <header>
   <div class="container">
     <h1>Simon Cai's Personalised Research Feed</h1>
-    <p class="tagline">
-      Weekly feed of new papers from Nature, Cell family, bioRxiv, and arXiv, scored against
-      <strong>my</strong> Paperpile reading history (recency-weighted) and re-ranked by AI with context from
-      <strong>my</strong> personal research knowledgebase. Rankings reflect my work in cancer proteomics,
-      foundation models, and multi-omics integration &mdash; so &ldquo;must-read&rdquo; here won&rsquo;t match yours.
-      Fork the <a href="https://github.com/ZhaoxiangSimonCai/SimonResearchRSS" target="_blank" rel="noopener">repo</a>
-      to build your own.
-    </p>
+    <details class="tagline-details">
+      <summary>About this feed</summary>
+      <p class="tagline">
+        Weekly feed of new papers from Nature, Cell family, bioRxiv, and arXiv, scored against
+        <strong>my</strong> Paperpile reading history (recency-weighted) and re-ranked by AI with context from
+        <strong>my</strong> personal research knowledgebase. Rankings reflect my work in cancer proteomics,
+        foundation models, and multi-omics integration &mdash; so &ldquo;must-read&rdquo; here won&rsquo;t match yours.
+        Fork the <a href="https://github.com/ZhaoxiangSimonCai/SimonResearchRSS" target="_blank" rel="noopener">repo</a>
+        to build your own.
+      </p>
+    </details>
+    <script>
+      // Default the description to expanded on desktop, collapsed on mobile.
+      // Re-syncs when crossing the breakpoint so a desktop→mobile resize
+      // doesn't leave a long paragraph stuck open in the sticky header.
+      (function () {
+        var d = document.querySelector('.tagline-details');
+        if (!d) return;
+        var mq = window.matchMedia('(min-width: 700px)');
+        function sync(e) {
+          if (e.matches) d.setAttribute('open', '');
+          else d.removeAttribute('open');
+        }
+        sync(mq);
+        if (mq.addEventListener) mq.addEventListener('change', sync);
+      })();
+    </script>
     <div class="meta" id="meta-line">
       Updated {{ updated_human }} &middot;
       <span id="meta-counts">{{ count }} papers</span>
