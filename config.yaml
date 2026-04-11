@@ -54,7 +54,12 @@ scoring:
   # secret (CI). Without the key the pipeline still runs and just skips the LLM stage.
   llm_rerank:
     enabled: true                        # opt-in
-    model: claude-sonnet-4-6              # default; switch to claude-haiku-4-5 for ~3x cheaper
+    # Switch models here. Options (April 2026):
+    #   claude-haiku-4-5   — fastest + cheapest (~$1.20/month steady state)
+    #   claude-sonnet-4-6  — smarter, ~3x cost (~$3.60/month)
+    # Changing the model invalidates the LLM cache automatically, so the next
+    # run re-scores every paper under the new model.
+    model: claude-haiku-4-5
     # Weekly runs produce fewer papers per run than daily — score everything so the
     # LLM judgment applies across the full feed, not just the medium+high tier.
     # Cost at Sonnet rates with ~200 papers/week ≈ $0.30/week.
@@ -104,17 +109,17 @@ feeds:
   - {name: Cancer Cell,                 url: "https://www.cell.com/cancer-cell/inpress.rss"}
   - {name: Molecular Cell,              url: "https://www.cell.com/molecular-cell/inpress.rss"}
 
-  # bioRxiv subject feeds (biology preprints — full weight, bioRxiv is the
-  # primary preprint channel for this domain)
-  - {name: bioRxiv Cancer Biology,   url: "https://connect.biorxiv.org/biorxiv_xml.php?subject=cancer_biology"}
-  - {name: bioRxiv Bioinformatics,   url: "https://connect.biorxiv.org/biorxiv_xml.php?subject=bioinformatics"}
-  - {name: bioRxiv Systems Biology,  url: "https://connect.biorxiv.org/biorxiv_xml.php?subject=systems_biology"}
-  - {name: bioRxiv Biochemistry,     url: "https://connect.biorxiv.org/biorxiv_xml.php?subject=biochemistry"}
+  # bioRxiv subject feeds — biology preprints, weight 0.76 so a bioRxiv paper
+  # needs raw score ~66 to clear the must-read threshold (vs 50 for journals).
+  # Tuned to target ~1/3 preprints in the must-read tier.
+  - {name: bioRxiv Cancer Biology,   url: "https://connect.biorxiv.org/biorxiv_xml.php?subject=cancer_biology", weight: 0.76}
+  - {name: bioRxiv Bioinformatics,   url: "https://connect.biorxiv.org/biorxiv_xml.php?subject=bioinformatics", weight: 0.76}
+  - {name: bioRxiv Systems Biology,  url: "https://connect.biorxiv.org/biorxiv_xml.php?subject=systems_biology", weight: 0.76}
+  - {name: bioRxiv Biochemistry,     url: "https://connect.biorxiv.org/biorxiv_xml.php?subject=biochemistry", weight: 0.76}
 
-  # arXiv CS/quant-biology preprints — weighted DOWN because this is the
-  # cutting-edge ML firehose (transferable techniques) but very noisy and
-  # not peer-reviewed. Papers need a higher raw score to reach must-read.
-  # Using arXiv's query API (the old /rss/ endpoint returns zero entries).
-  - {name: "arXiv cs.LG (machine learning)",   url: "http://export.arxiv.org/api/query?search_query=cat:cs.LG&sortBy=submittedDate&sortOrder=descending&max_results=40", weight: 0.75, max_papers: 40}
-  - {name: "arXiv cs.CV (vision / pathology)", url: "http://export.arxiv.org/api/query?search_query=cat:cs.CV&sortBy=submittedDate&sortOrder=descending&max_results=30", weight: 0.75, max_papers: 30}
-  - {name: "arXiv q-bio.QM (comp biology)",    url: "http://export.arxiv.org/api/query?search_query=cat:q-bio.QM&sortBy=submittedDate&sortOrder=descending&max_results=40", weight: 0.85, max_papers: 40}
+  # arXiv preprints — the cutting-edge ML firehose. cs.LG/cs.CV weighted
+  # hardest (need raw score ~77 to reach must-read). q-bio.QM is closer to
+  # this field so slightly kinder (needs raw ~69).
+  - {name: "arXiv cs.LG (machine learning)",   url: "http://export.arxiv.org/api/query?search_query=cat:cs.LG&sortBy=submittedDate&sortOrder=descending&max_results=40", weight: 0.65, max_papers: 40}
+  - {name: "arXiv cs.CV (vision / pathology)", url: "http://export.arxiv.org/api/query?search_query=cat:cs.CV&sortBy=submittedDate&sortOrder=descending&max_results=30", weight: 0.65, max_papers: 30}
+  - {name: "arXiv q-bio.QM (comp biology)",    url: "http://export.arxiv.org/api/query?search_query=cat:q-bio.QM&sortBy=submittedDate&sortOrder=descending&max_results=40", weight: 0.72, max_papers: 40}

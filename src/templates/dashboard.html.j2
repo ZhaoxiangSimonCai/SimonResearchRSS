@@ -20,6 +20,10 @@
     --tier-low-fg: #3730a3;
     --chip-bg: #f3f4f6;
     --chip-fg: #374151;
+    /* source-type colours (peer-reviewed, biology preprint, ML preprint) */
+    --src-journal:  #2563eb;   /* blue — trusted peer-reviewed */
+    --src-biorxiv:  #16a34a;   /* green — biology preprints */
+    --src-arxiv:    #d97706;   /* amber — ML/CS firehose */
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -37,6 +41,9 @@
       --tier-low-fg: #c7d2fe;
       --chip-bg: #334155;
       --chip-fg: #cbd5e1;
+      --src-journal:  #60a5fa;
+      --src-biorxiv:  #4ade80;
+      --src-arxiv:    #fbbf24;
     }
   }
   * { box-sizing: border-box; }
@@ -105,13 +112,33 @@
   .paper {
     background: var(--surface);
     border: 1px solid var(--border);
+    border-left: 4px solid var(--border);
     border-radius: 0.5rem;
     padding: 1.25rem;
     margin-bottom: 1rem;
     transition: opacity 0.15s;
   }
+  .paper.source-journal { border-left-color: var(--src-journal); }
+  .paper.source-biorxiv { border-left-color: var(--src-biorxiv); }
+  .paper.source-arxiv   { border-left-color: var(--src-arxiv); }
   .paper.read { opacity: 0.55; }
   .paper.read .paper-title a { text-decoration: line-through; color: var(--muted); }
+  .source-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.1rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    font-style: normal;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .source-pill.source-journal { color: var(--src-journal); border-color: var(--src-journal); }
+  .source-pill.source-biorxiv { color: var(--src-biorxiv); border-color: var(--src-biorxiv); }
+  .source-pill.source-arxiv   { color: var(--src-arxiv);   border-color: var(--src-arxiv); }
+  .source-pill .src-icon { font-size: 0.9em; line-height: 1; }
   .paper-head {
     display: flex;
     justify-content: space-between;
@@ -237,8 +264,8 @@
   <div class="container">
     <h1>Simon Cai's Personalised Research Feed</h1>
     <p class="tagline">
-      Weekly feed of new papers from Nature, Cell family, and bioRxiv, scored against
-      <strong>my</strong> Paperpile reading history (recency-weighted) and re-ranked by Claude with context from
+      Weekly feed of new papers from Nature, Cell family, bioRxiv, and arXiv, scored against
+      <strong>my</strong> Paperpile reading history (recency-weighted) and re-ranked by AI with context from
       <strong>my</strong> personal research knowledgebase. Rankings reflect my work in cancer proteomics,
       foundation models, and multi-omics integration &mdash; so &ldquo;must-read&rdquo; here won&rsquo;t match yours.
       Fork the <a href="https://github.com/ZhaoxiangSimonCai/SimonResearchRSS" target="_blank" rel="noopener">repo</a>
@@ -340,6 +367,28 @@
     return authors.slice(0, 3).join(', ') + ' et al.';
   }
 
+  // Classify a paper by journal string into one of three source types.
+  function sourceType(journal) {
+    if (!journal) return 'journal';
+    if (journal.indexOf('bioRxiv') === 0) return 'biorxiv';
+    if (journal.indexOf('arXiv') === 0)   return 'arxiv';
+    return 'journal';
+  }
+  // Label shown inside the source pill (shorter than the full journal name).
+  function sourceLabel(journal) {
+    const t = sourceType(journal);
+    if (t === 'biorxiv') return journal.replace(/^bioRxiv\s*/, 'bioRxiv · ');
+    if (t === 'arxiv')   return journal.replace(/^arXiv\s*/,   'arXiv · ');
+    return journal;
+  }
+  // Icon prefix for the pill — visible marker in addition to colour, for
+  // accessibility and quick scanning.
+  function sourceIcon(t) {
+    if (t === 'biorxiv') return '\u{1F9EC}'; // DNA
+    if (t === 'arxiv')   return '\u26A1';    // lightning bolt
+    return '\u{1F4D6}';                      // open book
+  }
+
   // ---------- counts shown in header + tier buttons ----------
   function recomputeCounts() {
     const total = papers.length;
@@ -393,7 +442,10 @@
         .map(function (k) { return '<span class="chip">' + escapeHtml(k) + '</span>'; })
         .join('');
       const authorLine = formatAuthors(p.authors);
-      const journalLine = escapeHtml(p.journal || '');
+      const srcType = sourceType(p.journal || '');
+      const sourcePillHtml = p.journal
+        ? '<span class="source-pill source-' + srcType + '"><span class="src-icon">' + sourceIcon(srcType) + '</span>' + escapeHtml(sourceLabel(p.journal)) + '</span>'
+        : '';
       const publishedLine = p.published ? new Date(p.published).toLocaleDateString() : '';
       const idAttr = escapeHtml(p.id);
       const readClass = isRead(p.id) ? ' read' : '';
@@ -412,7 +464,7 @@
         ? '<div class="llm-reason">' + escapeHtml(p.llm_reason) + '</div>'
         : '';
       return ''
-        + '<article class="paper' + readClass + '" data-id="' + idAttr + '">'
+        + '<article class="paper source-' + srcType + readClass + '" data-id="' + idAttr + '">'
         +   '<div class="paper-head">'
         +     '<h2 class="paper-title"><a href="' + escapeHtml(p.url) + '" target="_blank" rel="noopener">' + escapeHtml(p.title) + '</a></h2>'
         +     '<div class="paper-actions">'
@@ -421,9 +473,8 @@
         +     '</div>'
         +   '</div>'
         +   '<div class="paper-meta">'
-        +     (authorLine ? '<span>' + escapeHtml(authorLine) + '</span>' : '')
-        +     (authorLine && journalLine ? '<span class="dot">&middot;</span>' : '')
-        +     (journalLine ? '<span class="journal">' + journalLine + '</span>' : '')
+        +     sourcePillHtml
+        +     (authorLine ? '<span class="dot">&middot;</span><span>' + escapeHtml(authorLine) + '</span>' : '')
         +     (publishedLine ? '<span class="dot">&middot;</span><span>' + publishedLine + '</span>' : '')
         +   '</div>'
         +   llmReasonHtml
