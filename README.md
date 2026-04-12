@@ -1,23 +1,30 @@
 # SimonResearchRSS
 
-A personalised academic paper feed that runs daily via GitHub Actions, scores incoming papers against your Paperpile library + a hand-tuned keyword profile, and publishes a static dashboard to GitHub Pages. Zero API cost — all scoring runs on CPU with local sentence embeddings.
+A personalised academic paper feed that runs weekly via GitHub Actions, scores incoming papers against your Paperpile library + a hand-tuned keyword profile (+ optional LLM rerank against a private knowledgebase), and publishes a static dashboard to GitHub Pages. The dashboard is mobile-friendly, supports manual light/dark theming, and tracks read/unread state locally in your browser.
 
 ## How it works
 
-1. **Reference index** — `data/library.json` (your Paperpile export, 991 papers, 898 with abstracts) is encoded once with `sentence-transformers/all-MiniLM-L6-v2` and cached to `data/reference.npz`. The "added to Paperpile" timestamp is captured for recency weighting.
-2. **Fetch** — daily, pull RSS feeds listed in `config.yaml` (Nature/Cell family journals + bioRxiv subject feeds).
+1. **Reference index** — `data/library.json` (your Paperpile export) is encoded once with `sentence-transformers/all-MiniLM-L6-v2` and cached to `data/reference.npz`. The "added to Paperpile" timestamp is captured for recency weighting.
+2. **Fetch** — weekly, pull RSS/Atom feeds listed in `config.yaml` (Nature/Cell family journals + bioRxiv subject feeds + arXiv category queries).
 3. **Dedupe** — drop any paper already in your library (matched by DOI, arXiv ID, or normalised title).
-4. **Score** — for each candidate paper:
+4. **Stage 1 score** — for each candidate paper:
    - `embedding_score` = **recency-weighted** max cosine similarity to your library, mapped to 0–100. Each library paper's contribution is multiplied by `max(0.5 ** (years_since_added / half_life), floor)`, so recent additions count more than old ones.
    - `keyword_score`  = weighted substring match against Tier1 (30 pts) / Tier2 (15) / Tier3 (7) keywords, capped at 100
    - `final_score`    = 0.7 × embedding_score + 0.3 × keyword_score
-   - Tier: high (≥60), medium (≥30), low (<30)
-5. **(Optional) LLM rerank** — when enabled, papers above the medium tier are re-scored by the Anthropic API for cleaner ranking and a one-sentence justification. Cached by paper ID. See "Optional: LLM second-stage scoring" below.
-6. **Source weighting** — each paper's final score is multiplied by its feed's `weight` (default 1.0). Noisy sources like arXiv use weights of 0.75–0.85, so their papers need a higher raw score to reach must-read tier — this surfaces the transferable gems from the ML firehose without drowning the top tier in preprints.
-7. **Render** — write `docs/papers.json` and a self-contained `docs/index.html` with tier filter, text search, and read/unread tracking (localStorage).
-8. **Deploy** — commit changes to main and publish `docs/` via GitHub Pages.
+5. **(Optional) LLM rerank** — when enabled, every stage-1-scored paper is re-scored by the Anthropic API against your research profile / knowledgebase and blended back into `final_score`. Cached by paper ID + model + KB hash so only genuinely new papers cost API calls. See "Optional: LLM second-stage scoring" below.
+6. **Source weighting** — each paper's final score is multiplied by its feed's `weight` (default 1.0). bioRxiv uses 0.76 and arXiv uses 0.65–0.72, so preprints need a higher raw score to reach must-read tier. This surfaces the transferable gems from the preprint firehose without drowning the top tier.
+7. **Rank-based tiers** — papers are sorted by final score and the top N per tier are kept, subject to a minimum-score floor per tier (see "Tier shape" in Customising below). Everything that doesn't fit any tier is **dropped from the output entirely** — the published `docs/papers.json` only contains the curated ~90 papers per run.
+8. **Render** — write `docs/papers.json` and a self-contained `docs/index.html`.
+9. **Deploy** — commit changes to main and publish `docs/` via GitHub Pages.
 
-The dashboard supports marking papers as read (✓ button on each card) and hiding read papers ("Hide read" checkbox). Read state is stored in your browser's localStorage and survives daily updates because paper IDs are stable.
+### Dashboard features
+
+- **Tier filter**: button row on desktop, native dropdown on mobile. Shows live unread counts per tier.
+- **Text search**: client-side fuzzy search over title, abstract, authors, and journal.
+- **Read/unread tracking**: mark papers read (✓ button on each card), optionally hide read papers. State persists in `localStorage` and survives weekly updates because paper IDs are stable.
+- **Light/dark theme toggle**: ☀/☾ button in the header, preference persisted in `localStorage`. Falls back to your OS theme if you haven't set a manual override.
+- **Source-type colour coding**: each card has a coloured left border + icon pill — blue book for peer-reviewed journals, green DNA for bioRxiv, amber lightning for arXiv — for fast visual scanning.
+- **Collapsible description**: on narrow viewports the "About this feed" blurb collapses into a toggle so the sticky header stays compact.
 
 ## Setup
 
@@ -49,13 +56,23 @@ First run downloads the ~90 MB sentence-transformers model into `~/.cache/huggin
 
 All knobs live in `config.yaml`:
 
-- **Research profile keywords** — `research_profile.tier1_keywords` (30 pts each), `tier2_keywords` (15 pts), `tier3_keywords` (7 pts). Used for the keyword score component.
-- **Scoring thresholds** — `scoring`:
+- **Research profile keywords** — `research_profile.tier1_keywords` (30 pts each), `tier2_keywords` (15 pts), `tier3_keywords` (7 pts). Used for the keyword score component. These are unioned with the `## Keywords for Paper Matching` section of `data/knowledgebase.md` if present.
+- **Scoring** — `scoring`:
   - `nn_sim_low` / `nn_sim_high`: weighted-cosine range that maps to 0–100. Raise the floor if irrelevant papers score too high.
-  - `weights.nn` / `weights.keyword`: blend between semantic similarity and keyword matching.
-  - `tiers.high` / `tiers.medium`: tier cutoffs.
+  - `weights.nn` / `weights.keyword`: blend between semantic similarity and keyword matching (default 0.7 / 0.3).
+- **Tier shape (rank-based caps + score floors)** — `scoring.tiers` controls how many papers end up in the dashboard and how they're distributed. Each tier has a `max_count` (cap) and a `min_score` (floor). A paper is greedy-assigned to the highest tier where (a) there's still room under `max_count` and (b) its `final_score >= min_score`. Papers that don't fit any tier are **dropped from the output entirely**.
+  ```yaml
+  scoring:
+    tiers:
+      high:   {max_count: 10, min_score: 40}   # must-read
+      medium: {max_count: 30, min_score: 30}   # worth scanning
+      low:    {max_count: 50, min_score: 22}   # on the radar
+  ```
+  - **To shrink/grow the dashboard**: adjust `max_count` on each tier. Defaults give a curated ~90 papers per week.
+  - **To protect against weak weeks**: raise `min_score` on any tier. For example, `high.min_score: 55` means the must-read tier can be empty in a slow week rather than promoting mediocre papers just to fill the 10 slots.
+  - **To loosen for high-intake weeks**: lower the floors. They're safety nets; caps are the primary control.
 - **Recency weighting** — `scoring.recency_half_life_years` (default 5) and `scoring.recency_floor` (default 0.2). Library papers added more recently count more; older ones decay exponentially with this half-life and never fall below the floor.
-- **Lookback window** — `fetch.lookback_days` (default 14).
+- **Lookback window** — `fetch.lookback_days` (default 10 for weekly cadence).
 
 ### Managing feeds
 
@@ -91,15 +108,15 @@ To **add a feed**: append a new line. The pipeline picks up changes on the next 
 | 9 | Cell | `https://www.cell.com/cell/inpress.rss` | 1.0 | 100 |
 | 10 | Cancer Cell | `https://www.cell.com/cancer-cell/inpress.rss` | 1.0 | 100 |
 | 11 | Molecular Cell | `https://www.cell.com/molecular-cell/inpress.rss` | 1.0 | 100 |
-| 12 | bioRxiv Cancer Biology | `https://connect.biorxiv.org/biorxiv_xml.php?subject=cancer_biology` | 1.0 | 100 |
-| 13 | bioRxiv Bioinformatics | `https://connect.biorxiv.org/biorxiv_xml.php?subject=bioinformatics` | 1.0 | 100 |
-| 14 | bioRxiv Systems Biology | `https://connect.biorxiv.org/biorxiv_xml.php?subject=systems_biology` | 1.0 | 100 |
-| 15 | bioRxiv Biochemistry | `https://connect.biorxiv.org/biorxiv_xml.php?subject=biochemistry` | 1.0 | 100 |
-| 16 | arXiv cs.LG (ML) | `http://export.arxiv.org/api/query?...cs.LG...` | **0.75** | 40 |
-| 17 | arXiv cs.CV (vision, pathology) | `http://export.arxiv.org/api/query?...cs.CV...` | **0.75** | 30 |
-| 18 | arXiv q-bio.QM (comp biology) | `http://export.arxiv.org/api/query?...q-bio.QM...` | **0.85** | 40 |
+| 12 | bioRxiv Cancer Biology | `https://connect.biorxiv.org/biorxiv_xml.php?subject=cancer_biology` | **0.76** | 100 |
+| 13 | bioRxiv Bioinformatics | `https://connect.biorxiv.org/biorxiv_xml.php?subject=bioinformatics` | **0.76** | 100 |
+| 14 | bioRxiv Systems Biology | `https://connect.biorxiv.org/biorxiv_xml.php?subject=systems_biology` | **0.76** | 100 |
+| 15 | bioRxiv Biochemistry | `https://connect.biorxiv.org/biorxiv_xml.php?subject=biochemistry` | **0.76** | 100 |
+| 16 | arXiv cs.LG (ML) | `http://export.arxiv.org/api/query?...cs.LG...` | **0.65** | 40 |
+| 17 | arXiv cs.CV (vision / pathology) | `http://export.arxiv.org/api/query?...cs.CV...` | **0.65** | 30 |
+| 18 | arXiv q-bio.QM (comp biology) | `http://export.arxiv.org/api/query?...q-bio.QM...` | **0.72** | 40 |
 
-**About arXiv**: arXiv is the firehose for cutting-edge ML and computational techniques, but it's not peer-reviewed and very high-volume. The three feeds above use arXiv's query API (the old `/rss/` endpoint returns zero entries — it's dead). Weights of 0.75–0.85 mean an arXiv paper needs a raw score of ~59–67 to clear the must-read threshold of 50, vs 50 for a journal paper. This surfaces the genuinely transferable gems (foundation model, multi-omics, vision-language for biology, etc.) without drowning the must-read tier in ML preprints.
+**About preprint weighting**: bioRxiv and arXiv are firehoses for cutting-edge work but aren't peer-reviewed and produce very high volume. Source weights penalise the raw final score: with `high.min_score: 40`, a bioRxiv paper needs raw ≈53 to clear the must-read floor and an arXiv cs.LG paper needs raw ≈62, vs 40 for a Nature/Cell journal paper. Combined with the rank-based `high.max_count: 10` cap, this surfaces genuinely transferable preprints (foundation models, multi-omics, vision-language for biology, etc.) without drowning the top tier in ML noise. The three arXiv feeds use arXiv's query API (the old `/rss/` endpoint returns zero entries — it's dead).
 
 **The query API format** lets you filter by any arXiv category:
 ```
@@ -208,5 +225,5 @@ If the API key is missing or `enabled: false`, the pipeline gracefully skips the
 ## Notes
 
 - RSS URLs for Nature and Cell journals change periodically. If a feed starts returning 0 entries, verify its URL at the publisher's site. `fetch_and_score.py` logs each feed's entry count on every run.
-- The first real run is a good time to tune `nn_sim_low` / `nn_sim_high` — check the tier distribution in `docs/papers.json` and adjust if the "must-read" tier is empty or over-stuffed.
-- Ideas for future iterations are in `SUMMARY.md` → "Possible extensions" (Slack webhook, read/unread tracking, LLM digest).
+- Tier distribution is controlled by `scoring.tiers.{high,medium,low}.{max_count,min_score}`. The caps (`max_count`) fix the dashboard shape; the floors (`min_score`) are safety nets that stop the pipeline from promoting mediocre papers into a tier just to fill its quota in a weak week. Watch `finalize_tiers: kept N, dropped M` in the workflow logs — if the caps are consistently filled, the floors are permissive enough; if a tier is under-filled week after week, lower its floor.
+- Ideas for future iterations are in `SUMMARY.md` → "Possible extensions" (Slack webhook, LLM digest email, cross-device read-state sync).
