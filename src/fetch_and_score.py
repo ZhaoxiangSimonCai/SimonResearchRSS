@@ -300,10 +300,10 @@ def score_papers(
     high = float(scoring["nn_sim_high"])
     nn_w = float(scoring["weights"]["nn"])
     kw_w = float(scoring["weights"]["keyword"])
-    high_tier = float(scoring["tiers"]["high"])
-    medium_tier = float(scoring["tiers"]["medium"])
     half_life = float(scoring.get("recency_half_life_years", 5))
     floor = float(scoring.get("recency_floor", 0.2))
+    # Tier assignment is deferred to finalize_tiers_and_truncate() so that caps
+    # and floors are applied once, after LLM rerank and source-weight adjustments.
 
     profile = config["research_profile"]
     cfg_t1 = [k.lower() for k in profile.get("tier1_keywords") or []]
@@ -387,12 +387,6 @@ def score_papers(
 
         nn_score = float(nn_scores[i])
         final = round(nn_w * nn_score + kw_w * kw_score, 2)
-        if final >= high_tier:
-            tier = "high"
-        elif final >= medium_tier:
-            tier = "medium"
-        else:
-            tier = "low"
 
         # Top library match diagnostics
         top_idx = int(argmax[i])
@@ -426,7 +420,6 @@ def score_papers(
                 "recency_weight_used": round(float(recency_weights[top_idx]), 3),
                 "top_match_added_year": top_added_year,
                 "top_match_title": top_ref.get("title", "")[:120],
-                "tier": tier,
                 "matched_keywords": matched,
             }
         )
@@ -436,17 +429,16 @@ def score_papers(
 
 
 def apply_source_weights(scored: list[dict], config: dict) -> list[dict]:
-    """Multiply each paper's final_score by its source_weight, re-tier, re-sort.
+    """Multiply each paper's final_score by its source_weight and re-sort.
 
     Called after LLM rerank so the weight is applied to the final blended score,
     not to the intermediate stage1 or LLM scores. Papers from weighted-down
     sources (e.g. arXiv) need a higher raw final_score to clear the must-read bar.
+
+    Tier assignment happens later in finalize_tiers_and_truncate().
     """
     if not scored:
         return scored
-    tiers = (config.get("scoring") or {}).get("tiers") or {}
-    high_tier = float(tiers.get("high", 60))
-    medium_tier = float(tiers.get("medium", 30))
 
     n_weighted = 0
     for p in scored:
@@ -455,14 +447,7 @@ def apply_source_weights(scored: list[dict], config: dict) -> list[dict]:
             n_weighted += 1
         raw = p["final_score"]
         p["raw_final_score"] = raw
-        weighted = round(raw * w, 2)
-        p["final_score"] = weighted
-        if weighted >= high_tier:
-            p["tier"] = "high"
-        elif weighted >= medium_tier:
-            p["tier"] = "medium"
-        else:
-            p["tier"] = "low"
+        p["final_score"] = round(raw * w, 2)
     scored.sort(key=lambda p: p["final_score"], reverse=True)
     if n_weighted:
         print(
@@ -470,6 +455,64 @@ def apply_source_weights(scored: list[dict], config: dict) -> list[dict]:
             f"(from feeds with weight != 1.0)"
         )
     return scored
+
+
+def finalize_tiers_and_truncate(scored: list[dict], config: dict) -> list[dict]:
+    """Rank-based tier assignment with score floors.
+
+    Sorts papers by final_score desc and greedy-assigns each to the highest
+    tier where (a) there is still room under the tier's max_count and (b) the
+    score clears the tier's min_score. Papers that don't fit any tier are
+    DROPPED from the output — the dashboard only shows curated top papers.
+
+    Config shape:
+
+        scoring:
+          tiers:
+            high:   {max_count: 10, min_score: 40}
+            medium: {max_count: 30, min_score: 30}
+            low:    {max_count: 50, min_score: 22}
+    """
+    if not scored:
+        return scored
+
+    tiers_cfg = (config.get("scoring") or {}).get("tiers") or {}
+
+    def _params(name: str, default_cap: int, default_floor: float) -> tuple[int, float]:
+        t = tiers_cfg.get(name) or {}
+        return int(t.get("max_count", default_cap)), float(t.get("min_score", default_floor))
+
+    high_cap, high_floor = _params("high", 10, 40)
+    medium_cap, medium_floor = _params("medium", 30, 30)
+    low_cap, low_floor = _params("low", 50, 22)
+
+    scored.sort(key=lambda p: p["final_score"], reverse=True)
+    counts = {"high": 0, "medium": 0, "low": 0}
+    kept: list[dict] = []
+    for p in scored:
+        s = p["final_score"]
+        if counts["high"] < high_cap and s >= high_floor:
+            p["tier"] = "high"
+            counts["high"] += 1
+            kept.append(p)
+        elif counts["medium"] < medium_cap and s >= medium_floor:
+            p["tier"] = "medium"
+            counts["medium"] += 1
+            kept.append(p)
+        elif counts["low"] < low_cap and s >= low_floor:
+            p["tier"] = "low"
+            counts["low"] += 1
+            kept.append(p)
+        # else: dropped from output
+
+    dropped = len(scored) - len(kept)
+    print(
+        f"  finalize_tiers: kept {len(kept)}, dropped {dropped}  "
+        f"(high={counts['high']}/{high_cap}  "
+        f"medium={counts['medium']}/{medium_cap}  "
+        f"low={counts['low']}/{low_cap})"
+    )
+    return kept
 
 
 # ---------- main ----------
@@ -552,6 +595,10 @@ def main() -> int:
     # blended score. Penalises noisy/firehose sources (like arXiv cs.LG) so
     # they need a higher raw score to reach must-read tier.
     scored = apply_source_weights(scored, cfg)
+
+    # Rank-based tier assignment with score floors. Final step before write:
+    # keeps only the curated top ~90 papers (10/30/50 by default), drops the rest.
+    scored = finalize_tiers_and_truncate(scored, cfg)
 
     # write output
     out_path = REPO_ROOT / "docs" / "papers.json"

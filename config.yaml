@@ -38,10 +38,23 @@ scoring:
     nn: 0.7
     keyword: 0.3
   tiers:
-    # Lowered from 60/30: with LLM rerank blending (0.5 stage1 + 0.5 llm) the final
-    # score range is compressed, so the old 60 threshold starves the must-read tier.
-    high: 50
-    medium: 25
+    # Rank-based caps + score floors: each week the top-scoring papers fill the
+    # tiers up to `max_count`, but a paper only qualifies if its final_score
+    # clears `min_score`. Everything that doesn't fit any tier is DROPPED from
+    # docs/papers.json entirely. The dashboard shows ~90 curated papers per week.
+    #
+    # Tune max_count to resize the dashboard; tune min_score to protect against
+    # weak weeks (e.g. raise high.min_score to stop promoting mediocre papers
+    # into must-read when there aren't 10 strong candidates).
+    high:
+      max_count: 10
+      min_score: 40
+    medium:
+      max_count: 30
+      min_score: 30
+    low:
+      max_count: 50
+      min_score: 22
   # Recency weighting: each reference paper's contribution is multiplied by
   #   max(0.5 ** (years_since_added / half_life), floor)
   # before taking the max cosine. Uses Paperpile's `created` (added-to-library) date,

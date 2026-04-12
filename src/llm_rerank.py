@@ -280,13 +280,9 @@ def rerank(scored: list[dict], config: dict) -> list[dict]:
         p["final_score"] = round(blend_w * p["stage1_score"] + (1 - blend_w) * p["llm_score"], 2)
         applied += 1
 
-    # Re-tier and re-sort
-    tiers = (config.get("scoring") or {}).get("tiers") or {}
-    high_tier = float(tiers.get("high", 60))
-    medium_tier = float(tiers.get("medium", 30))
-    for p in scored:
-        s = p["final_score"]
-        p["tier"] = "high" if s >= high_tier else ("medium" if s >= medium_tier else "low")
+    # Re-sort by blended score. Tier assignment is deferred to
+    # finalize_tiers_and_truncate() in fetch_and_score.py so caps and floors
+    # are applied once, after all score adjustments are settled.
     scored.sort(key=lambda p: p["final_score"], reverse=True)
     print(f"  llm_rerank: applied LLM scores to {applied} papers; pipeline complete")
     return scored
