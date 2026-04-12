@@ -131,6 +131,87 @@ def load_queued_papers() -> list[dict]:
     return out
 
 
+# ---------- auto-keyword extraction ----------
+
+_STOPWORDS = frozenset(
+    "a an the of in to and is for on with by at from or that this it as be are was "
+    "were been has have had do does did will would can could may might shall should "
+    "not no but if than so very also more most other such only its our their we they "
+    "these those which what when where how all both each every into than through during "
+    "before after above below between under over again further then once here there who "
+    "why about up out some any many much own same too just because been being while well "
+    "based using used use however new novel show shown shows study studies results result "
+    "data methods method approach approaches analysis found demonstrate demonstrates "
+    "including including propose proposed work works provide provides suggest suggests "
+    "compared across within among via without among yet upon along still thus therefore "
+    "moreover furthermore additionally recently current currently first second two three "
+    "one high low large small potential possible key important significantly".split()
+)
+
+_WORD_RE = re.compile(r"\b[a-z][a-z'-]{2,}\b")
+
+
+def extract_paper_keywords(
+    title: str, abstract: str, matched: list[str], n: int = 6
+) -> list[str]:
+    """Extract top N keywords from a paper's title+abstract.
+
+    Uses phrase frequency scoring: counts how often each unigram/bigram
+    appears in the combined text. Bigrams must appear ≥2 times (so they're
+    real phrases, not just adjacent title words). Title presence gives a boost.
+    Returns keywords NOT already in `matched` (those are shown highlighted).
+    """
+    title_low = title.lower()
+    abstract_low = abstract.lower()
+    text_low = f"{title_low} {abstract_low}"
+    words = _WORD_RE.findall(text_low)
+    title_set = set(_WORD_RE.findall(title_low)) - _STOPWORDS
+    matched_set = set(k.lower() for k in matched)
+
+    # Count unigrams and bigrams
+    uni_count: dict[str, int] = {}
+    bi_count: dict[str, int] = {}
+    for i, w in enumerate(words):
+        if w in _STOPWORDS or len(w) < 3:
+            continue
+        uni_count[w] = uni_count.get(w, 0) + 1
+        if i + 1 < len(words):
+            w2 = words[i + 1]
+            if w2 not in _STOPWORDS and len(w2) >= 3:
+                bg = f"{w} {w2}"
+                bi_count[bg] = bi_count.get(bg, 0) + 1
+
+    # Score: bigrams need ≥2 occurrences to be considered real phrases;
+    # unigrams need ≥2 or must appear in the title.
+    candidates: dict[str, float] = {}
+    for bg, cnt in bi_count.items():
+        if cnt >= 2:
+            candidates[bg] = cnt * 3  # prefer multi-word
+            if any(tw in bg for tw in title_set):
+                candidates[bg] += 5
+    for w, cnt in uni_count.items():
+        if cnt >= 2 or w in title_set:
+            candidates[w] = cnt + (5 if w in title_set else 0)
+
+    # Remove candidates that overlap with already-matched keywords
+    for mk in matched_set:
+        candidates.pop(mk, None)
+        # also remove unigram components of matched bigrams
+        for part in mk.split():
+            candidates.pop(part, None)
+
+    # Deduplicate: if a unigram is a substring of a higher-ranked bigram, skip
+    ranked = sorted(candidates, key=lambda k: candidates[k], reverse=True)
+    selected: list[str] = []
+    for k in ranked:
+        if len(selected) >= n:
+            break
+        if " " not in k and any(k in s for s in selected):
+            continue
+        selected.append(k)
+    return selected
+
+
 _ARXIV_RE = re.compile(r"arxiv\.org/abs/(\d{4}\.\d{4,5})", re.IGNORECASE)
 _DOI_RE = re.compile(r"10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.IGNORECASE)
 
@@ -465,6 +546,9 @@ def score_papers(
                 "top_match_added_year": top_added_year,
                 "top_match_title": top_ref.get("title", "")[:120],
                 "matched_keywords": matched,
+                "auto_keywords": extract_paper_keywords(
+                    paper["title"], paper["abstract"], matched
+                ),
             }
         )
 

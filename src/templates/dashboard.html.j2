@@ -360,6 +360,11 @@
     color: var(--chip-fg);
     border-radius: 9999px;
   }
+  .chip.matched {
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+  }
   .score-detail {
     font-size: 0.75rem;
     color: var(--muted);
@@ -937,9 +942,16 @@
     empty.style.display = 'none';
 
     const html = filtered.map(function (p) {
-      const chips = (p.matched_keywords || [])
+      // Matched keywords (highlighted) + auto-extracted keywords (muted)
+      var matchedSet = {};
+      (p.matched_keywords || []).forEach(function (k) { matchedSet[k.toLowerCase()] = true; });
+      const matchedChips = (p.matched_keywords || [])
+        .map(function (k) { return '<span class="chip matched">' + escapeHtml(k) + '</span>'; })
+        .join('');
+      const autoChips = (p.auto_keywords || [])
         .map(function (k) { return '<span class="chip">' + escapeHtml(k) + '</span>'; })
         .join('');
+      const chips = matchedChips + autoChips;
       const authorLine = formatAuthors(p.authors);
       const srcType = sourceType(p.journal || '');
       const sourcePillHtml = p.journal
