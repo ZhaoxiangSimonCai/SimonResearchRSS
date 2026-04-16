@@ -92,7 +92,7 @@ scoring:
 admin:
   # SHA-256 hex of the admin passphrase. Empty string disables admin mode.
   # To regenerate: python -c "import hashlib; print(hashlib.sha256(b'YOUR_PASSPHRASE').hexdigest())"
-  passphrase_sha256: "87b3e52bfdeb1c03b4628a5d6ec49eba58e30b8267b84f94882a8afb7a9fb4ca"
+  passphrase_sha256: "ecd71870d1963316a97e3ac3408c9835ad8cf0f3c1bc703527c30265534f75ae"
   # GitHub repo for the sync button (Contents API target).
   repo: ZhaoxiangSimonCai/SimonResearchRSS
 
