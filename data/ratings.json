@@ -1,0 +1,64 @@
+{
+  "ratings": {
+    "10.1038/s41467-026-71715-2": {
+      "score": 5,
+      "rated_at": "2026-04-12T06:40:25.827Z",
+      "title": "Boosting pathology foundation models via few-shot prompt-tuning for rare cancer subtyping"
+    },
+    "10.64898/2026.04.08.717069": {
+      "score": 3,
+      "rated_at": "2026-04-12T06:41:29.312Z",
+      "title": "Marker-based CRISPR screens identify POU2F1 as a regulator of DLL3 and neuroendocrine identity in small cell lung cancer"
+    },
+    "10.1038/s43018-025-01108-9": {
+      "score": 5,
+      "rated_at": "2026-04-12T06:41:35.027Z",
+      "title": "Harnessing foundation models for digital pathology without re-training"
+    },
+    "10.1038/s43018-026-01141-2": {
+      "score": 4,
+      "rated_at": "2026-04-12T06:41:40.797Z",
+      "title": "PRET is a few-shot system for pan-cancer recognition without example training"
+    },
+    "2604.03630": {
+      "score": 5,
+      "rated_at": "2026-04-12T06:44:34.648Z",
+      "title": "A Multimodal Foundation Model of Spatial Transcriptomics and Histology for Biological Discovery and Clinical Prediction"
+    },
+    "10.1038/s41586-026-10326-9": {
+      "score": 3,
+      "rated_at": "2026-04-12T06:45:20.721Z",
+      "title": "Multiomics and deep learning dissect regulatory syntax in human development"
+    },
+    "10.64898/2026.04.07.716852": {
+      "score": 2,
+      "rated_at": "2026-04-15T04:12:34.485Z",
+      "title": "A SIRT5-induced metabolic switch underlies chemoresistance and ATR checkpoint dependence in triple-negative breast cancer"
+    },
+    "10.64898/2026.04.02.716249": {
+      "score": 2,
+      "rated_at": "2026-04-15T04:17:10.946Z",
+      "title": "Generalist method to reconstruct metabolic networks from multi-omics data at large-scale"
+    },
+    "10.1038/s41587-026-03079-3": {
+      "score": 2,
+      "rated_at": "2026-04-16T06:47:06.924Z",
+      "title": "An inducible base editing platform for cancer functional genomics in vivo"
+    },
+    "10.1038/d41586-026-01181-9": {
+      "score": 4,
+      "rated_at": "2026-04-22T01:29:28.093Z",
+      "title": "Molecular profiling of gene-edited cells reveals shared drug-resistance mechanisms"
+    },
+    "2604.20003": {
+      "score": 5,
+      "rated_at": "2026-05-01T05:38:06.488Z",
+      "title": "scpFormer: A Foundation Model for Unified Representation and Integration of the Single-Cell Proteomics"
+    },
+    "10.1038/s41568-026-00922-2": {
+      "score": 5,
+      "rated_at": "2026-05-01T05:38:36.403Z",
+      "title": "Advancing AI for multi-omics and clinical data integration in basic and translational cancer research"
+    }
+  }
+}
