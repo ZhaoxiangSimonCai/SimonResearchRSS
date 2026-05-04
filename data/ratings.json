@@ -59,6 +59,16 @@
       "score": 5,
       "rated_at": "2026-05-01T05:38:36.403Z",
       "title": "Advancing AI for multi-omics and clinical data integration in basic and translational cancer research"
+    },
+    "10.1038/s41587-026-03135-y": {
+      "score": 5,
+      "rated_at": "2026-05-04T05:41:52.073Z",
+      "title": "Tracing the rise of biomedical foundation models"
+    },
+    "10.1016/j.cell.2026.03.044": {
+      "score": 4,
+      "rated_at": "2026-05-04T05:42:29.298Z",
+      "title": "Global genetic interaction network of a human cell maps conserved principles and informs functional interpretation of gene co-essentiality profiles"
     }
   }
 }
