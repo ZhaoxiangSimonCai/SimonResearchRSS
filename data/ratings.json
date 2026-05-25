@@ -84,6 +84,21 @@
       "score": 5,
       "rated_at": "2026-05-13T12:13:58.516Z",
       "title": "AI-predicted spatial transcriptomics unlocks breast cancer biomarkers from pathology"
+    },
+    "10.1038/s41586-026-10652-y": {
+      "score": 5,
+      "rated_at": "2026-05-25T10:45:14.426Z",
+      "title": "A multi-agent system for automating scientific discovery"
+    },
+    "10.1038/d41586-026-01596-4": {
+      "score": 5,
+      "rated_at": "2026-05-25T10:45:15.438Z",
+      "title": "Teams of AI agents boost speed of research"
+    },
+    "10.1038/s42256-026-01201-3": {
+      "score": 5,
+      "rated_at": "2026-05-25T10:45:18.122Z",
+      "title": "Immunotherapy drug target identification using machine learning and patient-derived tumour explant validation"
     }
   }
 }
